@@ -42,6 +42,7 @@ Commands:
   kill   <name>                                停止并删除作业
   status <name>                                查看作业状态
   list                                         列出所有作业
+  ps     [name]                                查看目标进程详情
   edit   <name>                                编辑作业配置
 
 Start options:
@@ -63,7 +64,7 @@ EOF
 # ── 参数解析 ────────────────────────────────────────────────
 COMMAND="${1:-}"
 case "$COMMAND" in
-    start|stop|kill|status|list|edit) ;;
+    start|stop|kill|status|list|edit|ps) ;;
     *) print_usage; exit 1 ;;
 esac
 
@@ -262,6 +263,80 @@ cmd_list() {
     echo ""
 }
 
+# ── ps ──────────────────────────────────────────────────────
+
+# 辅助：将 ps 输出格式化为彩色表格
+_render_ps_table() {
+    local pids="$1"
+    local target="$2"
+    local pids_csv
+    pids_csv=$(echo "$pids" | tr '\n' ',' | sed 's/,$//')
+    [ -z "$pids_csv" ] && return
+    ps -o pid=,ppid=,nice=,%cpu=,%mem=,rss=,stat=,etime=,cmd= -p "$pids_csv" --no-headers 2>/dev/null \
+        | awk -v target="$target" '{
+            pid=$1; ppid=$2; nice=$3; cpu=$4; mem=$5; rss=$6; stat=$7; etime=$8;
+            $1=$2=$3=$4=$5=$6=$7=$8=""; cmd=substr($0,9);
+            if (nice >= target) color="\033[32m"; else color="\033[31m";
+            printf "  %-7s %-6s %s%4s\033[0m %5s %5s %6s %-4s %-7s %s\n",
+                pid, ppid, color, nice, cpu, mem, rss, stat, etime, substr(cmd,1,80)
+        }'
+}
+
+cmd_ps() {
+    local name="$1"
+
+    # 无参数：列出所有作业的进程
+    if [ -z "$name" ]; then
+        if [ ! -d "$CONF_DIR" ] || [ -z "$(ls -A "$CONF_DIR"/*.conf 2>/dev/null)" ]; then
+            die "no jobs configured"
+        fi
+        local first=true
+        for conf_file in "$CONF_DIR"/*.conf; do
+            [ -f "$conf_file" ] || continue
+            local job_name; job_name=$(basename "$conf_file" .conf)
+            source "$conf_file"
+            local pids; pids=$(pgrep -f "$PROCESS_PATTERN" 2>/dev/null || true)
+            [ -z "$pids" ] && continue
+            $first || echo ""
+            first=false
+            echo -e "${C_BOLD}── ${C_CYAN}${job_name}${C_RESET} ${C_BOLD}───────────────────────────────${C_RESET}"
+            echo -e "   pattern=${PROCESS_PATTERN}  target_nice=${NICE_TARGET}"
+            echo ""
+            printf "  %-7s %-6s %4s %5s %5s %6s %-4s %-7s %s\n" \
+                "PID" "PPID" "NICE" "%CPU" "%MEM" "RSS" "STAT" "TIME" "COMMAND"
+            echo "  ─────────────────────────────────────────────────────────────────────────"
+            _render_ps_table "$pids" "$NICE_TARGET"
+        done
+        return
+    fi
+
+    # 指定作业名
+    local conf_file="${CONF_DIR}/${name}.conf"
+    if [ ! -f "$conf_file" ]; then
+        die "job '$name' not found"
+    fi
+
+    source "$conf_file"
+
+    local pids
+    pids=$(pgrep -f "$PROCESS_PATTERN" 2>/dev/null || true)
+
+    if [ -z "$pids" ]; then
+        warn "no processes matched pattern: ${PROCESS_PATTERN}"
+        return
+    fi
+
+    echo ""
+    echo -e "${C_BOLD}── ${C_CYAN}${name}${C_RESET} ${C_BOLD}───────────────────────────────${C_RESET}"
+    echo -e "   pattern=${PROCESS_PATTERN}  target_nice=${NICE_TARGET}"
+    echo ""
+    printf "  %-7s %-6s %4s %5s %5s %6s %-4s %-7s %s\n" \
+        "PID" "PPID" "NICE" "%CPU" "%MEM" "RSS" "STAT" "TIME" "COMMAND"
+    echo "  ─────────────────────────────────────────────────────────────────────────"
+    _render_ps_table "$pids" "$NICE_TARGET"
+    echo ""
+}
+
 # ── edit ────────────────────────────────────────────────────
 cmd_edit() {
     local name="$1"
@@ -289,5 +364,6 @@ case "$COMMAND" in
     kill)   shift; cmd_kill "$@" ;;
     status) shift; cmd_status "$@" ;;
     list)   cmd_list ;;
+    ps)     shift; cmd_ps "${1:-}" ;;
     edit)   shift; cmd_edit "$@" ;;
 esac
