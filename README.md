@@ -208,7 +208,9 @@ DESCRIPTION="Jupyter kernel"           # 可读描述
 
 ## 监控面板
 
-### 启动
+提供两个监控脚本，内部刷新机制不同，显示内容一致。
+
+### nice-monitor.sh — 交互面板（bash 主循环）
 
 ```bash
 # 监控所有作业
@@ -220,6 +222,29 @@ DESCRIPTION="Jupyter kernel"           # 可读描述
 # 自定义刷新间隔
 ./nice-monitor.sh --interval 5
 ```
+
+**交互按键**：`q` 退出 | `r` 立即刷新 | `+/-` 调整间隔 | `Ctrl+C` 退出
+
+### nice-monitor-watch.sh — 轻量面板（watch 驱动）
+
+```bash
+# 用法完全相同
+./nice-monitor-watch.sh
+./nice-monitor-watch.sh jupyter-kernel model-train
+./nice-monitor-watch.sh --interval 5
+```
+
+**交互**：仅 `Ctrl+C` 退出（watch 不捕获单键输入）
+
+### 两者对比
+
+| 特性 | nice-monitor.sh | nice-monitor-watch.sh |
+|------|-----------------|----------------------|
+| 刷新机制 | bash `while + read -t` | `watch(1)` 命令 |
+| 交互按键 | q / r / +/- | Ctrl+C only |
+| 终端自适应 | 手动 `clear` | watch 原生处理 |
+| 额外依赖 | 无 | `watch`（procps 包，系统自带） |
+| 适用场景 | 需要频繁调整刷新速率 | 纯观察，挂后台 |
 
 ### 界面说明
 
@@ -279,9 +304,13 @@ Documents/nice_process_scheduling/
 │   ├── list                     列出所有作业
 │   └── edit   <name>            编辑配置文件
 │
-├── nice-monitor.sh               # 实时监控面板
+├── nice-monitor.sh               # 实时监控面板（交互版）
 │   └── 系统负载 + 每作业进程详情
-│       支持键盘交互（q/r/+/-）
+│       内建 while 循环，支持键盘交互（q/r/+/-）
+│
+├── nice-monitor-watch.sh          # 实时监控面板（watch 版）
+│   └── 与 nice-monitor.sh 显示相同
+│       由 watch(1) 驱动刷新循环，无需键盘交互
 │
 └── tmp/                          # 运行时数据
     ├── jupyter-kernel.conf       作业配置示例
