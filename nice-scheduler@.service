@@ -1,0 +1,15 @@
+[Unit]
+Description=Nice process scheduler: %i
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=/home/zjl/Documents/nice_process_scheduling/nice-scheduler.sh %i
+Restart=on-failure
+RestartSec=10
+
+# 安全加固
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target
