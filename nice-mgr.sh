@@ -112,12 +112,11 @@ DESCRIPTION="${desc}"
 EOF
     info "config written: $conf_file"
 
-    # 安装 systemd 模板
-    if [ ! -f "${SYSTEMD_USER_DIR}/nice-scheduler@.service" ]; then
-        mkdir -p "$SYSTEMD_USER_DIR"
-        cp "$SERVICE_TEMPLATE" "${SYSTEMD_USER_DIR}/nice-scheduler@.service"
-        info "service template installed to ${SYSTEMD_USER_DIR}/"
-    fi
+    # 安装 systemd 模板（动态替换路径，适配任意部署位置）
+    mkdir -p "$SYSTEMD_USER_DIR"
+    sed "s|__SCRIPT_DIR__|${SCRIPT_DIR}|g" "$SERVICE_TEMPLATE" \
+        > "${SYSTEMD_USER_DIR}/nice-scheduler@.service"
+    info "service template installed to ${SYSTEMD_USER_DIR}/"
 
     # 启用并启动
     systemctl --user daemon-reload
